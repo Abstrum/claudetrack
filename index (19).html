@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#d9622b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Claude Track">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<title>Claude Track</title>
+<style>
+:root{
+  --bg:#f4f2ee;--card:#fff;--ink:#1d1c1a;--mute:#8b877f;--line:#ece9e3;--line2:#d6d2ca;
+  --acc:#d9622b;--ok:#2f9e63;--wait:#d99a2b;
+  --ease:cubic-bezier(.32,.72,0,1);--spring:cubic-bezier(.34,1.56,.64,1);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f0f0e;--card:#181817;--ink:#f1efea;--mute:#8f8b84;--line:#262523;--line2:#3a3835;--ok:#46c07f;--wait:#e8b04a}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.3 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  display:flex;flex-direction:column;height:100dvh;overflow:hidden;overscroll-behavior:none;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+
+/* top bar */
+.top{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 18px 12px}
+.date{display:flex;align-items:center;gap:12px}
+.date b{font-size:38px;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.date div{display:flex;flex-direction:column;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);gap:2px}
+.date div span:last-child{color:var(--ink)}
+.ctx{font-size:13px;font-weight:600;color:var(--mute);padding:6px 12px;border-radius:99px;background:var(--card);
+  transition:color .3s,background .3s}
+body.has-sel .ctx{color:#fff;background:var(--acc)}
+.ctx.pop{animation:pop .45s var(--spring)}
+@keyframes pop{0%{transform:scale(.85);opacity:.4}100%{transform:none;opacity:1}}
+
+/* table */
+.scroller{flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;background:var(--card);
+  border-radius:22px 22px 0 0;box-shadow:0 -1px 0 var(--line);scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  scroll-snap-type:x proximity}
+.scroller::-webkit-scrollbar{display:none}
+.table{height:100%;display:grid;
+  width:max(100%,calc(176px + var(--n) * 104px));
+  grid-template-columns:104px 72px repeat(var(--n),minmax(104px,1fr));
+  grid-template-rows:42px repeat(10,minmax(0,1fr))}
+.table.sl{animation:inL .38s var(--ease)}
+.table.sr{animation:inR .38s var(--ease)}
+@keyframes inL{from{opacity:0;transform:translateX(36px)}to{opacity:1;transform:none}}
+@keyframes inR{from{opacity:0;transform:translateX(-36px)}to{opacity:1;transform:none}}
+.row{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:stretch;position:relative;
+  border-bottom:1px solid var(--line);transition:opacity .35s var(--ease),background .35s var(--ease),box-shadow .35s var(--ease)}
+.row.gap{border-bottom:2px solid var(--line2)}
+.row.head{border-bottom:1px solid var(--line2)}
+.hc{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--mute);position:relative}
+.hc button{position:absolute;top:50%;right:6px;width:22px;height:22px;border-radius:50%;margin-top:-11px;font-size:15px;line-height:1;
+  color:var(--mute);transition:background .2s,transform .3s var(--spring)}
+.hc button:active{transform:scale(.8);background:var(--line)}
+.row>*{border-right:1px solid var(--line)}
+.row>*:last-child{border-right:0}
+.memo{display:flex;align-items:center;padding:0 10px;font-size:12px;color:var(--mute);min-width:0}
+.memo span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;white-space:pre-line}
+.memo.has{color:var(--ink)}
+.num{display:flex;align-items:center;justify-content:center}
+.num b{display:grid;place-items:center;width:40px;height:min(40px,76%);aspect-ratio:1;border-radius:12px;font-size:18px;font-weight:700;
+  background:var(--bg);font-variant-numeric:tabular-nums;transition:background .3s var(--ease),color .3s,transform .5s var(--spring)}
+.t{position:relative;display:flex;align-items:center;justify-content:center;transition:background .25s}
+.t:active{background:var(--line)}
+.t.lock:active{background:none}
+.t.lock .tv{color:var(--mute);opacity:.5}
+.t.lock input:disabled{pointer-events:none}
+.row:not(.sel) .t input{pointer-events:none}
+.t .tv{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:7px}
+.t .tv.empty{color:var(--line2);font-weight:400;font-size:20px}
+.t .tv::before{content:"";width:7px;height:7px;border-radius:50%;background:transparent;transform:scale(0);transition:transform .4s var(--spring),background .3s}
+.t.ready .tv::before{background:var(--ok);transform:scale(1)}
+.t.wait .tv::before{background:var(--wait);transform:scale(1)}
+.t input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0}
+.t .clr{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;font-size:14px;color:var(--mute);
+  opacity:0;transform:scale(.5);pointer-events:none;transition:opacity .25s,transform .35s var(--spring);z-index:1}
+.row.sel .t.filled .clr{opacity:1;transform:none;pointer-events:auto}
+
+/* selection */
+.has-sel .row:not(.sel):not(.head){opacity:.32}
+.row.sel{background:color-mix(in srgb,var(--acc) 9%,transparent);box-shadow:inset 3px 0 0 var(--acc)}
+.row.sel .num b{background:var(--acc);color:#fff;transform:scale(1.12)}
+.new{animation:cellIn .5s var(--spring) both}
+.out{animation:cellOut .22s ease-in both}
+@keyframes cellIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+@keyframes cellOut{to{opacity:0;transform:scale(.7)}}
+
+/* bottom bar */
+.bar{flex:none;display:grid;background:var(--card);padding:10px 14px 14px;border-top:1px solid var(--line)}
+.bar>div{grid-area:1/1;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  transition:opacity .3s var(--ease),transform .45s var(--ease)}
+.nav button{height:48px;min-width:48px;border-radius:16px;background:var(--bg);font-size:18px;display:grid;place-items:center;padding:0 16px;
+  transition:transform .3s var(--spring),background .2s}
+.nav .today{font-size:14px;font-weight:600;color:var(--acc);transition:opacity .3s,transform .4s var(--spring)}
+.nav .today.hide{opacity:0;pointer-events:none;transform:scale(.8)}
+.act{opacity:0;transform:translateY(16px);pointer-events:none}
+.act button{flex:1;height:48px;border-radius:16px;background:var(--bg);font-weight:600;transition:transform .3s var(--spring),background .2s,opacity .4s,translate .5s var(--spring);
+  opacity:0;translate:0 12px}
+.act button.p{background:var(--acc);color:#fff}
+body.has-sel .nav{opacity:0;transform:translateY(-16px);pointer-events:none}
+body.has-sel .act{opacity:1;transform:none;pointer-events:auto}
+body.has-sel .act button{opacity:1;translate:0 0}
+body.has-sel .act button:nth-child(2){transition-delay:0s,0s,.05s,.05s}
+body.has-sel .act button:nth-child(3){transition-delay:0s,0s,.1s,.1s}
+body.has-sel .act button:nth-child(4){transition-delay:0s,0s,.15s,.15s}
+.bar button:active{transform:scale(.93)}
+
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:20;visibility:hidden;transition:visibility 0s .45s}
+.sheet.on{visibility:visible;transition-delay:0s}
+.sheet .bd{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;transition:opacity .4s var(--ease);backdrop-filter:blur(2px)}
+.sheet.on .bd{opacity:1}
+.panel{position:absolute;left:0;right:0;bottom:0;max-height:88dvh;display:flex;flex-direction:column;background:var(--card);
+  border-radius:26px 26px 0 0;transform:translateY(100%);transition:transform .5s var(--ease);padding-bottom:env(safe-area-inset-bottom)}
+.sheet.on .panel{transform:none}
+.grab{width:38px;height:5px;border-radius:9px;background:var(--line2);margin:9px auto 0}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:10px 18px 8px}
+.ph h2{margin:0;font-size:17px}
+.ph button{height:38px;padding:0 18px;border-radius:12px;background:var(--bg);font-weight:600;transition:transform .3s var(--spring)}
+.ph button.p{background:var(--acc);color:#fff}
+.ph button:active{transform:scale(.93)}
+.secs{overflow:auto;padding:0 18px 16px;display:flex;flex-direction:column;gap:12px}
+.sec{background:var(--bg);border-radius:16px;overflow:hidden;transition:box-shadow .25s}
+.sec:focus-within{box-shadow:0 0 0 2px var(--acc)}
+.sec label{display:block;padding:10px 14px 0;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.sec textarea{display:block;width:100%;min-height:104px;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;line-height:1.55;padding:6px 14px 12px;resize:none}
+
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:99px;
+  font-weight:600;font-size:14px;opacity:0;transform:translate(-50%,12px) scale(.9);transition:opacity .25s,transform .45s var(--spring);pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;transition-duration:.01s!important}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="date" id="date"></div>
+  <div class="ctx" id="ctx">Tap an account</div>
+</div>
+<div class="scroller" id="scroller"><div class="table" id="table"></div></div>
+<div class="bar">
+  <div class="nav">
+    <button id="prev" aria-label="Previous day">←</button>
+    <button class="today hide" id="today">Today</button>
+    <button id="next" aria-label="Next day">→</button>
+  </div>
+  <div class="act">
+    <button id="write">Write</button>
+    <button id="copy">Copy</button>
+    <button id="add" class="p">Add</button>
+    <button id="done">Done</button>
+  </div>
+</div>
+<div class="sheet" id="sheet">
+  <div class="bd" id="bd"></div>
+  <div class="panel">
+    <div class="grab"></div>
+    <div class="ph"><button id="cancel">Cancel</button><h2 id="ptitle"></h2><button id="save" class="p">Save</button></div>
+    <div class="secs" id="secs"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const EMAILS={5:'coach-scale-scheme@duck.com',4:'cresting-royal-dig@duck.com',3:'kept-vest-ravage@duck.com',2:'myth-tyke-mouse@duck.com',10:'diaper-surely-life@duck.com',9:'busily-flatly-move@duck.com',8:'april-shove-shelve@duck.com',7:'strobe-bauble-able@duck.com',6:'senator-cape-april@duck.com',1:'tachyon099@proton.me'};
+const ORDER=[5,4,3,2,10,9,8,7,6,1], GAP=[5,2,7], KEY='claudeTracker.v1';
+let S={cols:2,days:{}};
+try{const x=JSON.parse(localStorage.getItem(KEY));if(x&&x.days)S=x}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+let day=new Date(),sel=null;
+const $=id=>document.getElementById(id);
+const dk=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const D=()=>S.days[dk(day)]||(S.days[dk(day)]={t:{},m:{},cols:1});
+const N=()=>{const d=D();if(!d.cols){let n=1;for(const k in d.t)n=Math.max(n,(d.t[k]||[]).length);for(const k in d.m)n=Math.max(n,(d.m[k]||[]).length);d.cols=n}return d.cols};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const f12=v=>{if(!v)return'';let[h,m]=v.split(':').map(Number);const a=h>=12?'PM':'AM';h=h%12||12;return h+':'+String(m).padStart(2,'0')+' '+a};
+const buzz=()=>navigator.vibrate&&navigator.vibrate(8);
+
+function render(dir,newCol){
+  const d=D(),n=N(),T=$('table');
+  T.style.setProperty('--n',n);
+  let h='<div class="row head"><div class="hc">Memo</div><div class="hc">Claude</div>';
+  for(let c=0;c<n;c++)h+=`<div class="hc${c===newCol?' new':''}" data-c="${c}">T${c+1}${c===n-1&&n>1?'<button data-rm aria-label="Remove column">×</button>':''}</div>`;
+  h+='</div>';
+  ORDER.forEach(r=>{
+    const memo=(d.m[r]||[]).map((t,k)=>{t=(t||'').replace(/•/g,'').trim().replace(/\s*\n\s*/g,', ');return t?(n>1?`T${k+1}: `:'')+t:''}).filter(Boolean).join('  ');
+    h+=`<div class="row${GAP.includes(r)?' gap':''}" data-r="${r}"><div class="memo${memo?' has':''}"><span>${esc(memo||'—')}</span></div><div class="num"><b>${r}</b></div>`;
+    for(let c=0;c<n;c++){
+      const v=(d.t[r]||[])[c]||'',lock=c<n-1;
+      h+=`<div class="t${v?' filled':''}${lock?' lock':''}${c===newCol?' new':''}" data-c="${c}" data-v="${v}"><span class="tv${v?'':' empty'}">${v?f12(v):'+'}</span><input type="time" value="${v}"${lock&&v?' disabled':''} aria-label="Reset time"><button class="clr" data-clr aria-label="Clear">×</button></div>`;
+    }
+    h+='</div>';
+  });
+  T.classList.remove('sl','sr');T.innerHTML=h;
+  if(dir){void T.offsetWidth;T.classList.add(dir)}
+  const t=new Date();
+  $('date').innerHTML=`<b>${day.getDate()}</b><div><span>${day.toLocaleString('en',{month:'short'})}</span><span>${day.toLocaleString('en',{weekday:'short'})}</span></div>`;
+  $('today').classList.toggle('hide',dk(day)===dk(t));
+  applySel();tick();
+}
+function applySel(){
+  document.querySelectorAll('.row[data-r]').forEach(r=>r.classList.toggle('sel',+r.dataset.r===sel));
+  document.body.classList.toggle('has-sel',sel!==null);
+  const c=$('ctx');c.textContent=sel!==null?'Account '+sel:'Tap an account';
+  c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop');
+}
+function setSel(r){if(sel===r)return;sel=r;if(r!==null)buzz();applySel()}
+
+/* ready / waiting dots */
+function tick(){
+  const now=new Date(),today=dk(now),cur=dk(day),hm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  document.querySelectorAll('.t').forEach(c=>{
+    const v=c.dataset.v;let s='';
+    if(v){s=cur<today?'ready':cur>today?'wait':(v<=hm?'ready':'wait')}
+    c.classList.toggle('ready',s==='ready');c.classList.toggle('wait',s==='wait');
+  });
+}
+setInterval(tick,30000);
+
+/* table interactions */
+$('scroller').addEventListener('click',e=>{
+  const rm=e.target.closest('[data-rm]');
+  if(rm){
+    const last=N()-1;
+    document.querySelectorAll(`[data-c="${last}"]`).forEach(x=>x.classList.add('out'));
+    setTimeout(()=>{const d=D();for(const k in d.t)if(d.t[k])d.t[k].length=Math.min(d.t[k].length,last);for(const k in d.m)if(d.m[k])d.m[k].length=Math.min(d.m[k].length,last);d.cols=last;save();render()},220);return;
+  }
+  const clr=e.target.closest('[data-clr]');
+  if(clr){
+    const cell=clr.closest('.t'),r=cell.closest('.row').dataset.r,d=D();
+    (d.t[r]=d.t[r]||[])[+cell.dataset.c]='';save();render();return;
+  }
+  const row=e.target.closest('.row[data-r]');
+  if(!row){if(!e.target.closest('.hc'))setSel(null);return}
+  const r=+row.dataset.r;
+  if(e.target.closest('.num')&&sel===r){setSel(null);return}
+  setSel(r);
+  const inp=e.target.closest('input');
+  if(inp&&inp.showPicker){try{inp.showPicker()}catch(_){}}
+});
+$('scroller').addEventListener('change',e=>{
+  const i=e.target;if(i.tagName!=='INPUT')return;
+  const cell=i.closest('.t'),r=cell.closest('.row').dataset.r,d=D();
+  (d.t[r]=d.t[r]||[])[+cell.dataset.c]=i.value;save();
+  cell.dataset.v=i.value;cell.classList.toggle('filled',!!i.value);
+  const tv=cell.querySelector('.tv');tv.textContent=i.value?f12(i.value):'+';tv.classList.toggle('empty',!i.value);
+  tv.classList.remove('new');void tv.offsetWidth;tv.classList.add('new');tick();
+});
+document.querySelector('.top').addEventListener('click',()=>setSel(null));
+
+/* bar */
+const go=n=>{day.setDate(day.getDate()+n);sel=null;render(n>0?'sl':'sr')};
+$('done').onclick=()=>setSel(null);
+$('prev').onclick=()=>go(-1);$('next').onclick=()=>go(1);
+$('today').onclick=()=>{const was=day;day=new Date();sel=null;render(day>was?'sl':'sr')};
+$('add').onclick=()=>{D().cols=N()+1;save();render(null,N()-1);
+  const s=$('scroller');requestAnimationFrame(()=>s.scrollTo({left:s.scrollWidth,behavior:'smooth'}))};
+const toast=t=>{const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>e.classList.remove('on'),1300)};
+$('copy').onclick=async()=>{
+  if(sel===null)return;const v=EMAILS[sel]||String(sel);
+  try{await navigator.clipboard.writeText(v)}catch(_){
+    const t=document.createElement('textarea');t.value=v;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove()}
+  toast('Copied · '+v);
+};
+
+/* write sheet */
+$('write').onclick=()=>{
+  if(sel===null)return;
+  const m=D().m[sel]||[];let h='';
+  for(let c=0;c<N();c++)h+=`<div class="sec"><label>T${c+1}</label><textarea data-c="${c}" rows="4" placeholder="• note">${esc(m[c]||'')}</textarea></div>`;
+  $('secs').innerHTML=h;$('ptitle').textContent='Account '+sel;
+  $('sheet').classList.add('on');
+};
+const closeSheet=()=>$('sheet').classList.remove('on');
+$('cancel').onclick=$('bd').onclick=closeSheet;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
+$('secs').addEventListener('focusin',e=>{const t=e.target;if(t.tagName==='TEXTAREA'&&!t.value.trim()){t.value='• ';t.setSelectionRange(2,2)}});
+$('secs').addEventListener('keydown',e=>{
+  const t=e.target;if(t.tagName!=='TEXTAREA'||e.key!=='Enter')return;
+  e.preventDefault();const p=t.selectionStart;
+  t.value=t.value.slice(0,p)+'\n• '+t.value.slice(t.selectionEnd);t.selectionStart=t.selectionEnd=p+3;
+});
+$('save').onclick=()=>{
+  D().m[sel]=[...document.querySelectorAll('#secs textarea')].map(t=>t.value.replace(/•/g,'').trim()?t.value:'');
+  save();closeSheet();render();
+};
+render();
+</script>
+</body>
+</html>
