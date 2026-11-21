@@ -87,7 +87,7 @@ body.has-sel .ctx{color:#fff;background:var(--acc)}
 .row.sel .t.filled .clr{opacity:1;transform:none;pointer-events:auto}
 
 /* selection */
-.has-sel .row:not(.sel):not(.head){opacity:.32}
+.has-sel #table .row:not(.sel):not(.head){opacity:.32}
 .row.sel{background:color-mix(in srgb,var(--acc) 9%,transparent);box-shadow:inset 3px 0 0 var(--acc)}
 .row.sel .num b{background:var(--acc);color:#fff;transform:scale(1.12)}
 .new{animation:cellIn .5s var(--spring) both}
@@ -99,10 +99,11 @@ body.has-sel .ctx{color:#fff;background:var(--acc)}
 .bar{flex:none;display:grid;background:var(--card);padding:10px 14px 14px;border-top:1px solid var(--line)}
 .bar>div{grid-area:1/1;display:flex;align-items:center;justify-content:space-between;gap:10px;
   transition:opacity .3s var(--ease),transform .45s var(--ease)}
-.nav button{height:48px;min-width:48px;border-radius:16px;background:var(--bg);font-size:18px;display:grid;place-items:center;padding:0 16px;
+.nav button,.vnav button{height:48px;min-width:48px;border-radius:16px;background:var(--bg);font-size:18px;display:grid;place-items:center;padding:0 16px;
   transition:transform .3s var(--spring),background .2s}
-.nav .today{font-size:14px;font-weight:600;color:var(--acc);transition:opacity .3s,transform .4s var(--spring)}
-.nav .today.hide{opacity:0;pointer-events:none;transform:scale(.8)}
+.top .today{height:34px;padding:0 15px;margin:0 10px 0 auto;border-radius:99px;background:var(--card);font-size:13px;font-weight:700;color:var(--acc);transition:opacity .3s,transform .4s var(--spring)}
+.top .today:active{transform:scale(.92)}
+.top .today.hide{opacity:0;pointer-events:none;transform:scale(.8)}
 .act{opacity:0;transform:translateY(16px);pointer-events:none}
 .act button{flex:1;height:48px;border-radius:16px;background:var(--bg);font-weight:600;transition:transform .3s var(--spring),background .2s,opacity .4s,translate .5s var(--spring);
   opacity:0;translate:0 12px}
@@ -114,6 +115,24 @@ body.has-sel .act button:nth-child(2){transition-delay:0s,0s,.05s,.05s}
 body.has-sel .act button:nth-child(3){transition-delay:0s,0s,.1s,.1s}
 body.has-sel .act button:nth-child(4){transition-delay:0s,0s,.15s,.15s}
 .bar button:active{transform:scale(.93)}
+
+.nav .vbtn{flex:1;font-size:14px;font-weight:600;letter-spacing:.02em}
+.vnav{justify-content:flex-end}
+.top{min-height:62px}
+.vt{font-size:22px;font-weight:700;letter-spacing:-.01em}
+
+/* versions page */
+.vpage{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;background:var(--bg);
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  transform:translateX(-100%);visibility:hidden;transition:transform .5s var(--ease),visibility 0s .5s}
+.vpage.on{transform:none;visibility:visible;transition-delay:0s}
+.vtable{width:max(100%,calc(72px + var(--n) * 96px));grid-template-columns:72px repeat(var(--n),96px)}
+.vtable .row>:first-child{position:sticky;left:0;z-index:2;background:var(--card)}
+.vc{position:relative;display:flex}
+.vc input{width:100%;height:100%;border:0;outline:0;background:transparent;color:var(--acc);text-align:center;
+  font-family:inherit;font-weight:700;font-size:17px;font-variant-numeric:tabular-nums;padding:0 4px;border-radius:6px;
+  transition:background .25s,box-shadow .25s}
+.vc input:focus{background:color-mix(in srgb,var(--acc) 10%,transparent);box-shadow:inset 0 0 0 2px var(--acc)}
 
 /* sheet */
 .sheet{position:fixed;inset:0;z-index:20;visibility:hidden;transition:visibility 0s .45s}
@@ -144,13 +163,14 @@ body.has-sel .act button:nth-child(4){transition-delay:0s,0s,.15s,.15s}
 <body>
 <div class="top">
   <div class="date" id="date"></div>
+  <button class="today hide" id="today">Today</button>
   <div class="ctx" id="ctx">Tap an account</div>
 </div>
 <div class="scroller" id="scroller"><div class="table" id="table"></div></div>
 <div class="bar">
   <div class="nav">
     <button id="prev" aria-label="Previous day">←</button>
-    <button class="today hide" id="today">Today</button>
+    <button class="vbtn" id="vopen">Versions</button>
     <button id="next" aria-label="Next day">→</button>
   </div>
   <div class="act">
@@ -159,6 +179,11 @@ body.has-sel .act button:nth-child(4){transition-delay:0s,0s,.15s,.15s}
     <button id="add" class="p">Add</button>
     <button id="done">Done</button>
   </div>
+</div>
+<div class="vpage" id="vpage">
+  <div class="top"><div class="vt">Versions</div></div>
+  <div class="scroller" id="vscroller"><div class="table vtable" id="vtable"></div></div>
+  <div class="bar"><div class="vnav"><button id="vback" aria-label="Back to main page">→</button></div></div>
 </div>
 <div class="sheet" id="sheet">
   <div class="bd" id="bd"></div>
@@ -292,6 +317,38 @@ $('save').onclick=()=>{
   D().m[sel]=[...document.querySelectorAll('#secs textarea')].map(t=>t.value.replace(/•/g,'').trim()?t.value:'');
   save();closeSheet();render();
 };
+/* versions page */
+let vn=5;
+const vcell=(r,c,v,fresh)=>`<div class="vc${fresh?' new':''}"><input data-c="${c}" value="${esc(v||'')}" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Version"></div>`;
+function renderV(){
+  S.v=S.v||{};
+  let m=0;for(const k in S.v)(S.v[k]||[]).forEach((x,i)=>{if(x&&x.trim())m=Math.max(m,i+1)});
+  vn=Math.max(5,m+1);
+  const T=$('vtable');T.style.setProperty('--n',vn);
+  let h='<div class="row head"><div class="hc">Claude</div>'+'<div class="hc"></div>'.repeat(vn)+'</div>';
+  ORDER.forEach(r=>{
+    h+=`<div class="row${GAP.includes(r)?' gap':''}" data-r="${r}"><div class="num"><b>${r}</b></div>`;
+    for(let c=0;c<vn;c++)h+=vcell(r,c,(S.v[r]||[])[c]);
+    h+='</div>';
+  });
+  T.innerHTML=h;
+}
+function addVCol(){
+  vn++;const T=$('vtable');T.style.setProperty('--n',vn);
+  T.querySelector('.head').insertAdjacentHTML('beforeend','<div class="hc"></div>');
+  T.querySelectorAll('.row[data-r]').forEach(row=>row.insertAdjacentHTML('beforeend',vcell(row.dataset.r,vn-1,'',true)));
+}
+$('vtable').addEventListener('input',e=>{
+  const i=e.target;if(i.tagName!=='INPUT')return;
+  const r=i.closest('.row').dataset.r,c=+i.dataset.c;
+  S.v=S.v||{};(S.v[r]=S.v[r]||[])[c]=i.value;save();
+  if(c===vn-1&&i.value.trim())addVCol();
+});
+$('vtable').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
+const openV=()=>{setSel(null);renderV();$('vscroller').scrollLeft=0;$('vpage').classList.add('on')};
+const closeV=()=>{if(document.activeElement)document.activeElement.blur();$('vpage').classList.remove('on')};
+$('vopen').onclick=openV;$('vback').onclick=closeV;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeV()});
 render();
 </script>
 </body>
