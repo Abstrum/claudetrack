@@ -134,6 +134,27 @@ body.has-sel .act button:nth-child(4){transition-delay:0s,0s,.15s,.15s}
   transition:background .25s,box-shadow .25s}
 .vc input:focus{background:color-mix(in srgb,var(--acc) 10%,transparent);box-shadow:inset 0 0 0 2px var(--acc)}
 
+.vtop{gap:10px;padding-right:14px}
+.chips{flex:1;min-width:0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:38px;padding:0 16px;border-radius:99px;background:var(--card);color:var(--mute);font-weight:600;font-size:14px;
+  display:flex;align-items:center;transition:background .35s var(--ease),color .3s,transform .3s var(--spring)}
+.chip:active{transform:scale(.94)}
+.chip.on{background:var(--acc);color:#fff}
+.chip i{display:inline-block;max-width:0;opacity:0;overflow:hidden;font-style:normal;margin-left:0;letter-spacing:1px;
+  transition:max-width .35s var(--ease),opacity .3s,margin .35s var(--ease)}
+.chip.on i{max-width:24px;opacity:.85;margin-left:7px}
+.chip.new{animation:cellIn .5s var(--spring) both}
+.addf{flex:none;width:38px;height:38px;border-radius:50%;background:var(--card);font-size:22px;line-height:1;display:grid;place-items:center;color:var(--acc);
+  transition:transform .3s var(--spring)}
+.addf:active{transform:scale(.88) rotate(90deg)}
+.sec input{display:block;width:100%;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:17px;padding:6px 14px 14px}
+.fdel{height:46px;border-radius:14px;background:color-mix(in srgb,#e5484d 12%,transparent);color:#e5484d;font-weight:600;
+  transition:transform .3s var(--spring),background .25s,color .25s}
+.fdel.armed{background:#e5484d;color:#fff}
+.fdel:active{transform:scale(.97)}
+.fdel.hide{display:none}
+
 /* sheet */
 .sheet{position:fixed;inset:0;z-index:20;visibility:hidden;transition:visibility 0s .45s}
 .sheet.on{visibility:visible;transition-delay:0s}
@@ -181,9 +202,20 @@ body.has-sel .act button:nth-child(4){transition-delay:0s,0s,.15s,.15s}
   </div>
 </div>
 <div class="vpage" id="vpage">
-  <div class="top"><div class="vt">Versions</div></div>
+  <div class="top vtop"><div class="chips" id="chips"></div><button class="addf" id="addf" aria-label="New folder">+</button></div>
   <div class="scroller" id="vscroller"><div class="table vtable" id="vtable"></div></div>
   <div class="bar"><div class="vnav"><button id="vback" aria-label="Back to main page">→</button></div></div>
+</div>
+<div class="sheet" id="fsheet">
+  <div class="bd" id="fbd"></div>
+  <div class="panel">
+    <div class="grab"></div>
+    <div class="ph"><button id="fcancel">Cancel</button><h2 id="ftitle"></h2><button id="fsave" class="p">Save</button></div>
+    <div class="secs">
+      <div class="sec"><label>Folder name</label><input id="fname" maxlength="24" autocomplete="off" enterkeyhint="done" spellcheck="false" placeholder="e.g. game"></div>
+      <button class="fdel" id="fdel">Delete folder</button>
+    </div>
+  </div>
 </div>
 <div class="sheet" id="sheet">
   <div class="bd" id="bd"></div>
@@ -319,19 +351,28 @@ $('save').onclick=()=>{
 };
 /* versions page */
 let vn=5;
+function ensureVF(){
+  if(!S.vf||!S.vf.list||!S.vf.list.length){
+    S.vf={list:[{id:'f0',name:'Default'}],cur:'f0',d:{f0:S.v||{}}};delete S.v;save();
+  }
+  if(!S.vf.d[S.vf.cur])S.vf.cur=S.vf.list[0].id;
+  S.vf.list.forEach(f=>{S.vf.d[f.id]=S.vf.d[f.id]||{}});
+}
+const VD=()=>{ensureVF();return S.vf.d[S.vf.cur]};
 const vcell=(r,c,v,fresh)=>`<div class="vc${fresh?' new':''}"><input data-c="${c}" value="${esc(v||'')}" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Version"></div>`;
-function renderV(){
-  S.v=S.v||{};
-  let m=0;for(const k in S.v)(S.v[k]||[]).forEach((x,i)=>{if(x&&x.trim())m=Math.max(m,i+1)});
+function renderV(dir){
+  ensureVF();const V=VD();
+  let m=0;for(const k in V)(V[k]||[]).forEach((x,i)=>{if(x&&x.trim())m=Math.max(m,i+1)});
   vn=Math.max(5,m+1);
   const T=$('vtable');T.style.setProperty('--n',vn);
   let h='<div class="row head"><div class="hc">Claude</div>'+'<div class="hc"></div>'.repeat(vn)+'</div>';
   ORDER.forEach(r=>{
     h+=`<div class="row${GAP.includes(r)?' gap':''}" data-r="${r}"><div class="num"><b>${r}</b></div>`;
-    for(let c=0;c<vn;c++)h+=vcell(r,c,(S.v[r]||[])[c]);
+    for(let c=0;c<vn;c++)h+=vcell(r,c,(V[r]||[])[c]);
     h+='</div>';
   });
-  T.innerHTML=h;
+  T.classList.remove('sl','sr');T.innerHTML=h;
+  if(dir){void T.offsetWidth;T.classList.add(dir)}
 }
 function addVCol(){
   vn++;const T=$('vtable');T.style.setProperty('--n',vn);
@@ -341,14 +382,64 @@ function addVCol(){
 $('vtable').addEventListener('input',e=>{
   const i=e.target;if(i.tagName!=='INPUT')return;
   const r=i.closest('.row').dataset.r,c=+i.dataset.c;
-  S.v=S.v||{};(S.v[r]=S.v[r]||[])[c]=i.value;save();
+  const V=VD();(V[r]=V[r]||[])[c]=i.value;save();
   if(c===vn-1&&i.value.trim())addVCol();
 });
 $('vtable').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
-const openV=()=>{setSel(null);renderV();$('vscroller').scrollLeft=0;$('vpage').classList.add('on')};
+const openV=()=>{setSel(null);renderV();renderChips();$('vscroller').scrollLeft=0;$('vpage').classList.add('on')};
 const closeV=()=>{if(document.activeElement)document.activeElement.blur();$('vpage').classList.remove('on')};
+/* folders */
+function renderChips(newId){
+  const c=$('chips');
+  c.innerHTML=S.vf.list.map(f=>`<button class="chip${f.id===S.vf.cur?' on':''}${f.id===newId?' new':''}" data-id="${f.id}">${esc(f.name)}<i>⋯</i></button>`).join('');
+  const on=c.querySelector('.on');if(on)on.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
+}
+function switchF(id){
+  if(id===S.vf.cur)return;
+  const L=S.vf.list,dir=L.findIndex(f=>f.id===id)>L.findIndex(f=>f.id===S.vf.cur)?'sl':'sr';
+  S.vf.cur=id;save();
+  document.querySelectorAll('#chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
+  const on=$('chips').querySelector('.on');if(on)on.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
+  renderV(dir);$('vscroller').scrollLeft=0;
+}
+let fMode='new';
+function openF(mode){
+  fMode=mode;const f=S.vf.list.find(x=>x.id===S.vf.cur);
+  $('ftitle').textContent=mode==='new'?'New folder':'Folder';
+  $('fname').value=mode==='new'?'':f.name;
+  const d=$('fdel');d.classList.toggle('hide',mode==='new'||S.vf.list.length<2);d.classList.remove('armed');d.textContent='Delete folder';
+  $('fsheet').classList.add('on');
+  setTimeout(()=>{$('fname').focus();$('fname').select()},320);
+}
+const closeF=()=>{$('fname').blur();$('fsheet').classList.remove('on')};
+function saveF(){
+  const name=$('fname').value.trim().slice(0,24);if(!name){$('fname').focus();return}
+  if(fMode==='new'){
+    const id='f'+Date.now().toString(36);
+    S.vf.list.push({id,name});S.vf.d[id]={};
+    S.vf.cur=id;save();renderChips(id);renderV('sl');$('vscroller').scrollLeft=0;
+  }else{
+    S.vf.list.find(x=>x.id===S.vf.cur).name=name;save();renderChips();
+  }
+  closeF();
+}
+$('chips').addEventListener('click',e=>{
+  const b=e.target.closest('.chip');if(!b)return;
+  if(b.dataset.id===S.vf.cur)openF('edit');else switchF(b.dataset.id);
+});
+$('addf').onclick=()=>openF('new');
+$('fsave').onclick=saveF;$('fcancel').onclick=$('fbd').onclick=closeF;
+$('fname').addEventListener('keydown',e=>{if(e.key==='Enter')saveF()});
+$('fdel').onclick=()=>{
+  const d=$('fdel');
+  if(!d.classList.contains('armed')){d.classList.add('armed');d.textContent='Tap again to delete this folder & its data';return}
+  const L=S.vf.list,i=L.findIndex(f=>f.id===S.vf.cur);
+  delete S.vf.d[S.vf.cur];L.splice(i,1);S.vf.cur=L[Math.max(0,i-1)].id;save();
+  renderChips();renderV('sr');$('vscroller').scrollLeft=0;closeF();
+};
 $('vopen').onclick=openV;$('vback').onclick=closeV;
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeV()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('fsheet').classList.contains('on'))closeF();else closeV()}});
+ensureVF();
 render();
 </script>
 </body>
