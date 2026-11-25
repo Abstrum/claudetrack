@@ -1,0 +1,15 @@
+const C = 'claude-track-v1';
+self.addEventListener('install', e => {
+  self.skipWaiting();
+  e.waitUntil(caches.open(C).then(c => c.addAll(['./', 'index.html', 'manifest.json', 'icon-512.png'])).catch(() => {}));
+});
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+// network first (so updates show up), cache fallback (so it opens offline)
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request)
+      .then(r => { const cp = r.clone(); caches.open(C).then(c => c.put(e.request, cp)); return r; })
+      .catch(() => caches.match(e.request))
+  );
+});
